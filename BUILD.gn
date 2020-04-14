@@ -1,0 +1,246 @@
+import("../webrtc.gni")
+
+if (is_android) {
+  import("//build/config/android/config.gni")
+  import("//build/config/android/rules.gni")
+} else if (is_mac) {
+  import("//build/config/mac/rules.gni")
+} else if (is_ios) {
+  import("//build/config/ios/rules.gni")
+}
+
+group("apollo-rtc-sdk2.0") {
+
+    testonly = true
+    deps = []
+
+    if(is_mac){
+        deps += [
+             ":MacDemo",
+             ":app_client"
+        ]
+    }
+    if(is_ios){
+       deps += [
+             ":apolloClient"
+        ]
+    }
+}
+
+if(is_mac){
+    mac_app_bundle("MacDemo"){
+
+        deps = []
+
+        output_name = "MacDemo"   
+        sources = [
+            "demo_mac/objc/main.m",
+            "demo_mac/objc/APPMacDemoDelegate.m",
+            "demo_mac/objc/APPMacDemoDelegate.h",
+            "demo_mac/objc/APPDemoViewController.m",
+            "demo_mac/objc/APPDemoViewController.h",
+            "demo_mac/objc/RTCDemoClient.mm",
+            "demo_mac/objc/RTCDemoClient.h",
+            "demo_mac/objc/device/APPSettingsModel+Private.h",
+            "demo_mac/objc/device/APPSettingsStore.m",
+            "demo_mac/objc/device/APPSettingsStore.h",
+            "demo_mac/objc/device/APPSettingsModel.m",
+            "demo_mac/objc/device/APPSettingsModel.h",
+            "demo_mac/objc/device/APPCaptureController.m",
+            "demo_mac/objc/device/APPCaptureController.h",
+        ]  
+        info_plist = "demo_mac/objc/Info.plist"
+
+        cflags_objc = [
+          # TODO(bugs.webrtc.org/10837): Remove this when usage of
+          # archivedDataWithRootObject will be removed.
+          "-Wno-unguarded-availability",
+        ]
+
+        deps += [
+             "../sdk:mac_framework_bundle",
+             "../sdk:mac_framework_objc+link",
+        ]  
+
+        libs = [ "AppKit.framework",
+                 "Foundation.framework",
+                 "AVFoundation.framework",
+                 "CoreMedia.framework", ]
+
+        if (rtc_use_metal_rendering) {
+            defines = [ "RTC_SUPPORTS_METAL"]
+        }
+
+        ldflags = [
+            "-rpath",
+            "@executable_path/../Frameworks",
+        ]
+    }
+
+    rtc_executable("app_client") {
+        testonly = true
+        sources = [
+          "demo_mac/cplusplus/main.cc",
+          "interface/apollo_engine_interface.h",
+          "src/apollo_engine_impl.cc",
+          "src/apollo_engine_impl.h"
+        ]
+
+        deps = [
+          "../api:audio_options_api",
+          "../api:create_peerconnection_factory",
+          "../api:libjingle_peerconnection_api",
+          "../api:media_stream_interface",
+          "../api:scoped_refptr",
+          "../api/audio:audio_mixer_api",
+          "../api/audio_codecs:audio_codecs_api",
+          "../api/video:video_frame_i420",
+          "../api/video:video_rtp_headers",
+          "../api/video_codecs:video_codecs_api",
+          "../media:rtc_media_base",
+          "../p2p:rtc_p2p",
+          "../rtc_base:checks",
+          "../rtc_base:testclient",
+          "../rtc_base/third_party/sigslot",
+          "../system_wrappers:field_trial",
+          "../test:field_trial",
+          "../test:platform_video_capturer",
+          "../test:rtp_test_utils",
+          "//third_party/abseil-cpp/absl/memory",
+          "//third_party/abseil-cpp/absl/types:optional",
+        ]
+        
+    deps += [
+      "../api:libjingle_peerconnection_api",
+      "../api/audio_codecs:builtin_audio_decoder_factory",
+      "../api/audio_codecs:builtin_audio_encoder_factory",
+      "../api/video:video_frame",
+      "../api/video:video_rtp_headers",
+      "../api/video_codecs:builtin_video_decoder_factory",
+      "../api/video_codecs:builtin_video_encoder_factory",
+      "../media:rtc_audio_video",
+      "../modules/audio_device",
+      "../modules/audio_processing",
+      "../modules/audio_processing:api",
+      "../modules/video_capture:video_capture_module",
+      "../pc:libjingle_peerconnection",
+      "../pc:peerconnection",
+      "../rtc_base",
+      "../rtc_base:rtc_base_approved",
+      "../rtc_base:rtc_json",
+      "../test:video_test_common",
+      "//third_party/abseil-cpp/absl/flags:flag",
+      "//third_party/abseil-cpp/absl/flags:parse",
+      "//third_party/libyuv",
+    ]
+  }
+}
+
+if(is_ios){
+   config("common_config_objc") {
+
+    cflags = [
+      "-Wimplicit-retain-self",
+      "-Wstrict-overflow",
+      "-Wmissing-field-initializers",
+    ]
+  }
+    rtc_library("apolloClient_lib") {
+      testonly = true
+      sources = [
+        "demo_ios/apollo_client/AppDelegate.h",
+        "demo_ios/apollo_client/AppDelegate.m",
+        "demo_ios/apollo_client/ViewController.h",
+        "demo_ios/apollo_client/ViewController.mm",
+      ]
+
+      deps = [
+        ":apollo_lib",
+      ]
+
+      if (current_cpu == "arm64") {
+        deps += [ "../sdk:metal_objc" ]
+      } 
+    }
+
+    ios_app_bundle("apolloClient") {
+      testonly = true
+      sources = [
+          "demo_ios/apollo_client/main.m",
+      ]
+
+      info_plist = "demo_ios/apollo_client/Info.plist"
+
+      configs += [ "..:common_config" ]
+      public_configs = [ "..:common_inherited_config" ]
+        
+      deps = [
+        ":apolloClient_lib",
+      ]
+
+      if (target_cpu == "x86") {
+        deps += [ "//testing/iossim" ]
+      }
+    }
+}
+
+    rtc_library("apollo_lib") {
+      # iOS must use WebRTC.framework which is dynamically linked.
+      testonly = true
+      sources = [
+          "src/apollo_engine_impl.cc",
+          "src/apollo_engine_impl_test.cc",
+          "src/apollo_engine_impl_internal.cc",
+          "src/apollo_engine_impl.h",
+          "src/apollo_packet_transport.cc",
+          "src/apollo_packet_transport.h",
+          "src/apollo_internal_types.h",
+          "interface/apollo_engine_interface.h",
+          "interface/apollo_types.h",
+      ]
+
+       deps = [
+          "../api:audio_options_api",
+          "../api:create_peerconnection_factory",
+          "../api:libjingle_peerconnection_api",
+          "../api:media_stream_interface",
+          "../api:scoped_refptr",
+          "../api/audio:audio_mixer_api",
+          "../api/audio_codecs:audio_codecs_api",
+          "../api/video:video_frame_i420",
+          "../api/video:video_rtp_headers",
+          "../api/video_codecs:video_codecs_api",
+          "../media:rtc_media_base",
+          "../p2p:rtc_p2p",
+          "../rtc_base:checks",
+          "../rtc_base:testclient",
+          "../rtc_base/third_party/sigslot",
+          "../system_wrappers:field_trial",
+          "../test:field_trial",
+          "../test:platform_video_capturer",
+          "../test:rtp_test_utils",
+          "//third_party/abseil-cpp/absl/memory",
+          "//third_party/abseil-cpp/absl/types:optional",
+          "../api:libjingle_peerconnection_api",
+          "../api/audio_codecs:builtin_audio_decoder_factory",
+          "../api/audio_codecs:builtin_audio_encoder_factory",
+          "../api/video:video_frame",
+          "../api/video:video_rtp_headers",
+          "../api/video_codecs:builtin_video_decoder_factory",
+          "../api/video_codecs:builtin_video_encoder_factory",
+          "../media:rtc_audio_video",
+          "../modules/audio_device",
+          "../modules/audio_processing",
+          "../modules/audio_processing:api",
+          "../modules/video_capture:video_capture_module",
+          "../pc:libjingle_peerconnection",
+          "../pc:peerconnection",
+          "../rtc_base",
+          "../rtc_base:rtc_base_approved",
+          "../rtc_base:rtc_json",
+          "../test:video_test_common",
+          "//third_party/abseil-cpp/absl/flags:flag",
+          "//third_party/abseil-cpp/absl/flags:parse",
+          "//third_party/libyuv",  
+        ]
+    }
